@@ -3,16 +3,24 @@ Flaskアプリケーション本体
 Phase 1: 基本機能（CRUD、一覧表示、検索）
 Phase 2: 天気API連携
 """
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask_wtf.csrf import CSRFProtect
 from sqlalchemy import case, func
 from models import db, Task
 from config import Config
 from api_client import get_weather_safe
 
+# ロガー設定
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# CSRF保護を有効化
+csrf = CSRFProtect(app)
 
 # データベース初期化
 db.init_app(app)
@@ -85,28 +93,68 @@ def check_and_generate_repeat_tasks():
     """
     期限が過ぎた繰り返しタスクをチェックし、必要に応じて新しいタスクを生成します。
     この関数は定期的に呼び出されることを想定しています。
+    
+    Returns:
+        int: 生成されたタスクの数
     """
-    now = datetime.utcnow()
+    try:
+        now = datetime.utcnow()
+        
+        # 期限が過ぎた繰り返しタスク（未完了）を取得
+        overdue_repeat_tasks = Task.query.filter(
+            Task.repeat_type != 'none',
+            Task.due_date < now,
+            Task.status == 'pending',
+            Task.parent_task_id.is_(None)  # 親タスクのみ（生成されたタスクではない）
+        ).all()
+        
+        generated_count = 0
+        for task in overdue_repeat_tasks:
+            try:
+                new_task = generate_repeat_task(task)
+                if new_task:
+                    db.session.add(new_task)
+                    generated_count += 1
+            except Exception as e:
+                logger.error(f"繰り返しタスクの生成に失敗しました (task_id: {task.id}): {e}", exc_info=True)
+                # 個別のタスク生成エラーは記録するが、処理は継続
+        
+        if generated_count > 0:
+            try:
+                db.session.commit()
+                logger.info(f"{generated_count}件の繰り返しタスクを生成しました")
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f"繰り返しタスクのコミットに失敗しました: {e}", exc_info=True)
+                raise
+        
+        return generated_count
+    except Exception as e:
+        logger.error(f"繰り返しタスクのチェック処理でエラーが発生しました: {e}", exc_info=True)
+        # エラーが発生してもアプリケーションは継続
+        return 0
+
+
+def parse_due_date(date_str: str) -> Optional[datetime]:
+    """
+    日付文字列をパースします。
     
-    # 期限が過ぎた繰り返しタスク（未完了）を取得
-    overdue_repeat_tasks = Task.query.filter(
-        Task.repeat_type != 'none',
-        Task.due_date < now,
-        Task.status == 'pending',
-        Task.parent_task_id.is_(None)  # 親タスクのみ（生成されたタスクではない）
-    ).all()
+    Args:
+        date_str: ISO形式の日付文字列
     
-    generated_count = 0
-    for task in overdue_repeat_tasks:
-        new_task = generate_repeat_task(task)
-        if new_task:
-            db.session.add(new_task)
-            generated_count += 1
+    Returns:
+        パースされた日付オブジェクト、またはNone（パース失敗時）
+    """
+    if not date_str:
+        return None
     
-    if generated_count > 0:
-        db.session.commit()
-    
-    return generated_count
+    try:
+        # ISO形式の日付をパース（Zを+00:00に変換）
+        date_str_clean = date_str.replace('Z', '+00:00')
+        return datetime.fromisoformat(date_str_clean)
+    except (ValueError, AttributeError) as e:
+        logger.warning(f"日付のパースに失敗しました: {date_str}, エラー: {e}")
+        return None
 
 
 def add_weather_to_task(task_dict: dict) -> dict:
@@ -128,8 +176,10 @@ def add_weather_to_task(task_dict: dict) -> dict:
 
 
 # ==================== REST API エンドポイント ====================
+# REST APIエンドポイントはCSRF保護から除外（APIクライアント用）
 
 @app.route('/api/tasks', methods=['GET'])
+@csrf.exempt
 def get_tasks():
     """
     タスク一覧取得
@@ -190,6 +240,7 @@ def get_tasks():
 
 
 @app.route('/api/tasks', methods=['POST'])
+@csrf.exempt
 def create_task():
     """
     タスク作成
@@ -214,10 +265,9 @@ def create_task():
     # 期限のパース
     due_date = None
     if data.get('due_date'):
-        try:
-            due_date = datetime.fromisoformat(data['due_date'].replace('Z', '+00:00'))
-        except (ValueError, AttributeError):
-            return jsonify({'error': 'Invalid date format. Use ISO format.'}), 400
+        due_date = parse_due_date(data['due_date'])
+        if due_date is None:
+            return jsonify({'error': 'Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS).'}), 400
     
     # タスク作成
     task = Task(
@@ -241,6 +291,7 @@ def create_task():
 
 
 @app.route('/api/tasks/<int:task_id>', methods=['GET'])
+@csrf.exempt
 def get_task(task_id: int):
     """
     タスク詳細取得
@@ -258,6 +309,7 @@ def get_task(task_id: int):
 
 
 @app.route('/api/tasks/<int:task_id>', methods=['PUT'])
+@csrf.exempt
 def update_task(task_id: int):
     """
     タスク更新
@@ -288,10 +340,10 @@ def update_task(task_id: int):
     
     if 'due_date' in data:
         if data['due_date']:
-            try:
-                task.due_date = datetime.fromisoformat(data['due_date'].replace('Z', '+00:00'))
-            except (ValueError, AttributeError):
-                return jsonify({'error': 'Invalid date format. Use ISO format.'}), 400
+            parsed_date = parse_due_date(data['due_date'])
+            if parsed_date is None:
+                return jsonify({'error': 'Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS).'}), 400
+            task.due_date = parsed_date
         else:
             task.due_date = None
     
@@ -326,6 +378,7 @@ def update_task(task_id: int):
 
 
 @app.route('/api/tasks/<int:task_id>', methods=['DELETE'])
+@csrf.exempt
 def delete_task(task_id: int):
     """
     タスク削除
@@ -346,6 +399,7 @@ def delete_task(task_id: int):
 
 
 @app.route('/api/tasks/search', methods=['GET'])
+@csrf.exempt
 def search_tasks():
     """
     タスク検索
@@ -473,10 +527,10 @@ def create_task_web():
     due_date = None
     due_date_str = request.form.get('due_date')
     if due_date_str:
-        try:
-            due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
-        except (ValueError, AttributeError):
-            pass
+        due_date = parse_due_date(due_date_str)
+        if due_date is None:
+            flash('期限の日付形式が正しくありません。正しい形式で入力してください。', 'error')
+            return redirect(url_for('new_task_form'))
     
     task = Task(
         title=title,
@@ -533,10 +587,11 @@ def update_task_web(task_id: int):
     # 期限のパース
     due_date_str = request.form.get('due_date')
     if due_date_str:
-        try:
-            task.due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
-        except (ValueError, AttributeError):
-            pass
+        parsed_date = parse_due_date(due_date_str)
+        if parsed_date is None:
+            flash('期限の日付形式が正しくありません。正しい形式で入力してください。', 'error')
+            return redirect(url_for('edit_task_form', task_id=task_id))
+        task.due_date = parsed_date
     else:
         task.due_date = None
     
@@ -584,6 +639,7 @@ def toggle_task_status(task_id: int):
 
 
 @app.route('/api/tasks/generate-repeat', methods=['POST'])
+@csrf.exempt
 def generate_repeat_tasks_api():
     """
     繰り返しタスクを生成するAPIエンドポイント（手動実行用）

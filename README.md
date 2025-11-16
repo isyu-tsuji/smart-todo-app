@@ -45,9 +45,21 @@ http://localhost:5000 にアクセス
 - **API**: OpenWeatherMap
 - **Database**: SQLite
 
+## デプロイ
+
+デプロイ手順は [デプロイガイド](./docs/DEPLOY.md) を参照してください。
+
+対応プラットフォーム:
+- Heroku
+- Railway
+- Render
+- VPS (Ubuntu/Debian)
+
 ## ドキュメント
 
-詳細は [開発ログ](./docs/DEVELOPMENT_LOG.md) を参照
+- [開発ログ](./docs/DEVELOPMENT_LOG.md)
+- [デプロイガイド](./docs/DEPLOY.md)
+- [コードレビュー結果](./docs/APP_REVIEW_RESULT.md)
 
 ## ライセンス
 

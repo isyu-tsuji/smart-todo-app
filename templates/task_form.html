@@ -6,6 +6,7 @@
 <h2 style="margin-bottom: 20px;">{% if task %}タスク編集{% else %}新しいタスクを作成{% endif %}</h2>
 
 <form method="POST" action="{% if task %}/tasks/{{ task.id }}/update{% else %}/tasks{% endif %}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <div class="form-group">
         <label for="title">タイトル *</label>
         <input type="text" id="title" name="title" value="{{ task.title if task else '' }}" required>

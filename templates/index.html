@@ -95,11 +95,13 @@
             <a href="/tasks/{{ task.id }}" class="btn btn-primary">詳細</a>
             <a href="/tasks/{{ task.id }}/edit" class="btn btn-secondary">編集</a>
             <form method="POST" action="/tasks/{{ task.id }}/toggle" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <button type="submit" class="btn btn-success">
                     {% if task.status == 'pending' %}完了{% else %}未完了に戻す{% endif %}
                 </button>
             </form>
             <form method="POST" action="/tasks/{{ task.id }}/delete" style="display: inline;" onsubmit="return confirm('本当に削除しますか？');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <button type="submit" class="btn btn-danger">削除</button>
             </form>
         </div>
