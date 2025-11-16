@@ -33,6 +33,8 @@ class Task(db.Model):
     status = db.Column(db.String(20), default='pending', nullable=False)
     category = db.Column(db.String(50), nullable=True)
     location = db.Column(db.String(100), nullable=True)
+    repeat_type = db.Column(db.String(20), default='none', nullable=False)  # none/daily/weekly/monthly
+    parent_task_id = db.Column(db.Integer, db.ForeignKey('tasks.id'), nullable=True)  # 繰り返しタスクの親タスクID
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
@@ -52,6 +54,8 @@ class Task(db.Model):
             'status': self.status,
             'category': self.category,
             'location': self.location,
+            'repeat_type': self.repeat_type,
+            'parent_task_id': self.parent_task_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

@@ -3,9 +3,10 @@ Flaskアプリケーション本体
 Phase 1: 基本機能（CRUD、一覧表示、検索）
 Phase 2: 天気API連携
 """
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Optional
 from flask import Flask, render_template, request, jsonify, redirect, url_for
-from sqlalchemy import case
+from sqlalchemy import case, func
 from models import db, Task
 from config import Config
 from api_client import get_weather_safe
@@ -22,6 +23,91 @@ with app.app_context():
 
 
 # ==================== ヘルパー関数 ====================
+
+def generate_repeat_task(parent_task: Task) -> Optional[Task]:
+    """
+    繰り返しタスクを生成します。
+    
+    Args:
+        parent_task: 親タスク（繰り返し設定があるタスク）
+    
+    Returns:
+        生成されたタスク、またはNone（生成できない場合）
+    """
+    if not parent_task.repeat_type or parent_task.repeat_type == 'none':
+        return None
+    
+    if not parent_task.due_date:
+        # 期限がない場合は生成しない
+        return None
+    
+    # 次の期限日を計算
+    next_due_date = None
+    if parent_task.repeat_type == 'daily':
+        next_due_date = parent_task.due_date + timedelta(days=1)
+    elif parent_task.repeat_type == 'weekly':
+        next_due_date = parent_task.due_date + timedelta(weeks=1)
+    elif parent_task.repeat_type == 'monthly':
+        # 月の加算（簡易版）
+        next_due_date = parent_task.due_date + timedelta(days=30)
+    
+    if not next_due_date:
+        return None
+    
+    # 既に同じ親タスクから生成されたタスクが存在するかチェック
+    existing_task = Task.query.filter(
+        Task.parent_task_id == parent_task.id,
+        Task.due_date == next_due_date,
+        Task.status == 'pending'
+    ).first()
+    
+    if existing_task:
+        # 既に存在する場合は生成しない
+        return None
+    
+    # 新しいタスクを作成
+    new_task = Task(
+        title=parent_task.title,
+        description=parent_task.description,
+        due_date=next_due_date,
+        priority=parent_task.priority,
+        status='pending',
+        category=parent_task.category,
+        location=parent_task.location,
+        repeat_type=parent_task.repeat_type,
+        parent_task_id=parent_task.id
+    )
+    
+    return new_task
+
+
+def check_and_generate_repeat_tasks():
+    """
+    期限が過ぎた繰り返しタスクをチェックし、必要に応じて新しいタスクを生成します。
+    この関数は定期的に呼び出されることを想定しています。
+    """
+    now = datetime.utcnow()
+    
+    # 期限が過ぎた繰り返しタスク（未完了）を取得
+    overdue_repeat_tasks = Task.query.filter(
+        Task.repeat_type != 'none',
+        Task.due_date < now,
+        Task.status == 'pending',
+        Task.parent_task_id.is_(None)  # 親タスクのみ（生成されたタスクではない）
+    ).all()
+    
+    generated_count = 0
+    for task in overdue_repeat_tasks:
+        new_task = generate_repeat_task(task)
+        if new_task:
+            db.session.add(new_task)
+            generated_count += 1
+    
+    if generated_count > 0:
+        db.session.commit()
+    
+    return generated_count
+
 
 def add_weather_to_task(task_dict: dict) -> dict:
     """
@@ -141,7 +227,8 @@ def create_task():
         priority=data.get('priority', 'medium'),
         status=data.get('status', 'pending'),
         category=data.get('category'),
-        location=data.get('location')
+        location=data.get('location'),
+        repeat_type=data.get('repeat_type', 'none')
     )
     
     db.session.add(task)
@@ -224,6 +311,11 @@ def update_task(task_id: int):
     if 'location' in data:
         task.location = data['location']
     
+    if 'repeat_type' in data:
+        if data['repeat_type'] not in ['none', 'daily', 'weekly', 'monthly']:
+            return jsonify({'error': 'Invalid repeat_type. Use none, daily, weekly, or monthly.'}), 400
+        task.repeat_type = data['repeat_type']
+    
     task.updated_at = datetime.utcnow()
     
     db.session.commit()
@@ -297,6 +389,9 @@ def index():
     """
     トップページ（タスク一覧）
     """
+    # 繰り返しタスクの自動生成をチェック（ページアクセス時に実行）
+    check_and_generate_repeat_tasks()
+    
     # クエリパラメータ取得
     status_filter = request.args.get('status', 'all')
     category_filter = request.args.get('category', None)
@@ -389,7 +484,8 @@ def create_task_web():
         due_date=due_date,
         priority=request.form.get('priority', 'medium'),
         category=request.form.get('category'),
-        location=request.form.get('location')
+        location=request.form.get('location'),
+        repeat_type=request.form.get('repeat_type', 'none')
     )
     
     db.session.add(task)
@@ -447,6 +543,7 @@ def update_task_web(task_id: int):
     task.priority = request.form.get('priority', 'medium')
     task.category = request.form.get('category')
     task.location = request.form.get('location')
+    task.repeat_type = request.form.get('repeat_type', 'none')
     task.updated_at = datetime.utcnow()
     
     db.session.commit()
@@ -474,9 +571,105 @@ def toggle_task_status(task_id: int):
     task = Task.query.get_or_404(task_id)
     task.status = 'completed' if task.status == 'pending' else 'pending'
     task.updated_at = datetime.utcnow()
+    
+    # タスクが完了した場合、繰り返しタスクを生成
+    if task.status == 'completed' and task.repeat_type != 'none':
+        new_task = generate_repeat_task(task)
+        if new_task:
+            db.session.add(new_task)
+    
     db.session.commit()
     
     return redirect(url_for('index'))
+
+
+@app.route('/api/tasks/generate-repeat', methods=['POST'])
+def generate_repeat_tasks_api():
+    """
+    繰り返しタスクを生成するAPIエンドポイント（手動実行用）
+    """
+    try:
+        count = check_and_generate_repeat_tasks()
+        return jsonify({
+            'message': f'{count}件の繰り返しタスクを生成しました',
+            'generated_count': count
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/dashboard')
+def dashboard():
+    """
+    統計ダッシュボード
+    """
+    # 総タスク数
+    total_tasks = Task.query.count()
+    
+    # 完了タスク数
+    completed_tasks = Task.query.filter(Task.status == 'completed').count()
+    
+    # 完了率
+    completion_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+    
+    # ステータス別の分布
+    status_distribution = {
+        'pending': Task.query.filter(Task.status == 'pending').count(),
+        'completed': completed_tasks
+    }
+    
+    # 優先度別の分布
+    priority_distribution = {
+        'high': Task.query.filter(Task.priority == 'high').count(),
+        'medium': Task.query.filter(Task.priority == 'medium').count(),
+        'low': Task.query.filter(Task.priority == 'low').count()
+    }
+    
+    # 期限切れタスクの数（期限が過去で、未完了のタスク）
+    now = datetime.utcnow()
+    overdue_tasks = Task.query.filter(
+        Task.due_date < now,
+        Task.status == 'pending'
+    ).count()
+    
+    # カテゴリ別の分布
+    category_distribution = db.session.query(
+        Task.category,
+        func.count(Task.id).label('count')
+    ).group_by(Task.category).all()
+    category_data = {cat or '未設定': count for cat, count in category_distribution}
+    category_labels = list(category_data.keys())
+    category_values = list(category_data.values())
+    
+    # 今週のタスク作成数（日別）
+    week_ago = now - timedelta(days=7)
+    daily_created = db.session.query(
+        func.date(Task.created_at).label('date'),
+        func.count(Task.id).label('count')
+    ).filter(
+        Task.created_at >= week_ago
+    ).group_by(func.date(Task.created_at)).all()
+    
+    # SQLiteのfunc.date()は文字列を返すため、そのまま使用
+    daily_created_data = {
+        str(date): count 
+        for date, count in daily_created
+    }
+    
+    stats = {
+        'total_tasks': total_tasks,
+        'completed_tasks': completed_tasks,
+        'completion_rate': round(completion_rate, 1),
+        'status_distribution': status_distribution,
+        'priority_distribution': priority_distribution,
+        'overdue_tasks': overdue_tasks,
+        'category_distribution': category_data,
+        'category_labels': category_labels,
+        'category_values': category_values,
+        'daily_created': daily_created_data
+    }
+    
+    return render_template('dashboard.html', stats=stats)
 
 
 if __name__ == '__main__':
