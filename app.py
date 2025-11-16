@@ -1,12 +1,14 @@
 """
 Flaskアプリケーション本体
 Phase 1: 基本機能（CRUD、一覧表示、検索）
+Phase 2: 天気API連携
 """
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from sqlalchemy import case
 from models import db, Task
 from config import Config
+from api_client import get_weather_safe
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -17,6 +19,26 @@ db.init_app(app)
 # データベーステーブル作成
 with app.app_context():
     db.create_all()
+
+
+# ==================== ヘルパー関数 ====================
+
+def add_weather_to_task(task_dict: dict) -> dict:
+    """
+    タスク辞書に天気情報を追加します。
+    
+    Args:
+        task_dict: タスク情報を含む辞書
+    
+    Returns:
+        天気情報が追加されたタスク辞書
+    """
+    location = task_dict.get('location')
+    if location:
+        weather = get_weather_safe(location)
+        if weather:
+            task_dict['weather'] = weather
+    return task_dict
 
 
 # ==================== REST API エンドポイント ====================
@@ -69,8 +91,15 @@ def get_tasks():
     
     tasks = query.all()
     
+    # タスクに天気情報を追加
+    tasks_with_weather = []
+    for task in tasks:
+        task_dict = task.to_dict()
+        add_weather_to_task(task_dict)
+        tasks_with_weather.append(task_dict)
+    
     return jsonify({
-        'tasks': [task.to_dict() for task in tasks]
+        'tasks': tasks_with_weather
     })
 
 
@@ -133,10 +162,12 @@ def get_task(task_id: int):
         task_id: タスクID
     
     Returns:
-        タスク情報
+        タスク情報（天気情報を含む）
     """
     task = Task.query.get_or_404(task_id)
-    return jsonify(task.to_dict())
+    task_dict = task.to_dict()
+    add_weather_to_task(task_dict)
+    return jsonify(task_dict)
 
 
 @app.route('/api/tasks/<int:task_id>', methods=['PUT'])
@@ -310,7 +341,16 @@ def index():
     
     tasks = query.all()
     
-    return render_template('index.html', tasks=tasks, 
+    # タスクに天気情報を追加（テンプレート用）
+    tasks_with_weather = []
+    for task in tasks:
+        task_dict = task.to_dict()
+        add_weather_to_task(task_dict)
+        # タスクオブジェクトに天気情報を追加（テンプレートでアクセス可能にする）
+        task.weather = task_dict.get('weather')
+        tasks_with_weather.append(task)
+    
+    return render_template('index.html', tasks=tasks_with_weather, 
                          status_filter=status_filter,
                          category_filter=category_filter,
                          sort_by=sort_by,
@@ -364,6 +404,10 @@ def task_detail(task_id: int):
     タスク詳細
     """
     task = Task.query.get_or_404(task_id)
+    # タスクに天気情報を追加（テンプレート用）
+    task_dict = task.to_dict()
+    add_weather_to_task(task_dict)
+    task.weather = task_dict.get('weather')
     return render_template('task_detail.html', task=task)
 
 

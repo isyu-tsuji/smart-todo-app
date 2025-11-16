@@ -77,6 +77,17 @@
             {% if task.location %}
             <span>場所: {{ task.location }}</span>
             {% endif %}
+            {% if task.weather %}
+            <span style="display: inline-flex; align-items: center; gap: 5px;">
+                {% if task.weather.is_bad_weather %}
+                ⚠️
+                {% endif %}
+                🌤️ {{ task.weather.condition }}
+                {% if task.weather.temp is not none %}
+                {{ task.weather.temp }}°C
+                {% endif %}
+            </span>
+            {% endif %}
             <span>作成: {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
         </div>
         <div class="actions">

@@ -36,6 +36,23 @@
         {% if task.location %}
         <div><strong>場所:</strong> {{ task.location }}</div>
         {% endif %}
+        {% if task.weather %}
+        <div style="margin: 15px 0; padding: 15px; background-color: {% if task.weather.is_bad_weather %}#fef3c7{% else %}#f0f9ff{% endif %}; border-radius: 5px; border-left: 4px solid {% if task.weather.is_bad_weather %}#f59e0b{% else %}#3b82f6{% endif %};">
+            <strong>天気情報:</strong>
+            <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
+                {% if task.weather.is_bad_weather %}
+                <span style="font-size: 24px;">⚠️</span>
+                <span style="color: #f59e0b; font-weight: bold;">悪天候の可能性があります</span>
+                {% else %}
+                <span style="font-size: 24px;">🌤️</span>
+                {% endif %}
+                <span>{{ task.weather.condition }}</span>
+                {% if task.weather.temp is not none %}
+                <span style="font-weight: bold;">{{ task.weather.temp }}°C</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
         <div><strong>作成日時:</strong> {{ task.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
         <div><strong>更新日時:</strong> {{ task.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
     </div>
