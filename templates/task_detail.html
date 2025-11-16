@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}{{ task.title }} - Smart ToDo App{% endblock %}
+
+{% block content %}
+<div class="task-card">
+    <div class="task-header">
+        <h2 class="task-title">
+            {% if task.status == 'completed' %}
+                <s>{{ task.title }}</s>
+            {% else %}
+                {{ task.title }}
+            {% endif %}
+        </h2>
+        <div>
+            <span class="badge badge-{{ task.priority }}">{{ task.priority }}</span>
+            <span class="badge badge-{{ task.status }}">
+                {% if task.status == 'pending' %}未完了{% else %}完了{% endif %}
+            </span>
+        </div>
+    </div>
+    
+    {% if task.description %}
+    <div style="margin: 20px 0; padding: 15px; background-color: #f9fafb; border-radius: 5px;">
+        <p style="white-space: pre-wrap;">{{ task.description }}</p>
+    </div>
+    {% endif %}
+    
+    <div class="task-meta" style="margin-top: 20px;">
+        {% if task.category %}
+        <div><strong>カテゴリ:</strong> {{ task.category }}</div>
+        {% endif %}
+        {% if task.due_date %}
+        <div><strong>期限:</strong> {{ task.due_date.strftime('%Y-%m-%d %H:%M') }}</div>
+        {% endif %}
+        {% if task.location %}
+        <div><strong>場所:</strong> {{ task.location }}</div>
+        {% endif %}
+        <div><strong>作成日時:</strong> {{ task.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+        <div><strong>更新日時:</strong> {{ task.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+    </div>
+    
+    <div class="actions" style="margin-top: 30px;">
+        <a href="/tasks/{{ task.id }}/edit" class="btn btn-primary">編集</a>
+        <form method="POST" action="/tasks/{{ task.id }}/toggle" style="display: inline;">
+            <button type="submit" class="btn btn-success">
+                {% if task.status == 'pending' %}完了にする{% else %}未完了に戻す{% endif %}
+            </button>
+        </form>
+        <form method="POST" action="/tasks/{{ task.id }}/delete" style="display: inline;" onsubmit="return confirm('本当に削除しますか？');">
+            <button type="submit" class="btn btn-danger">削除</button>
+        </form>
+        <a href="/" class="btn btn-secondary">一覧に戻る</a>
+    </div>
+</div>
+{% endblock %}
+
+
+
+
+
+
+

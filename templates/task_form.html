@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}{% if task %}タスク編集{% else %}タスク作成{% endif %} - Smart ToDo App{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 20px;">{% if task %}タスク編集{% else %}新しいタスクを作成{% endif %}</h2>
+
+<form method="POST" action="{% if task %}/tasks/{{ task.id }}/update{% else %}/tasks{% endif %}">
+    <div class="form-group">
+        <label for="title">タイトル *</label>
+        <input type="text" id="title" name="title" value="{{ task.title if task else '' }}" required>
+    </div>
+    
+    <div class="form-group">
+        <label for="description">説明</label>
+        <textarea id="description" name="description">{{ task.description if task else '' }}</textarea>
+    </div>
+    
+    <div class="form-group">
+        <label for="due_date">期限</label>
+        <input type="datetime-local" id="due_date" name="due_date" 
+               value="{% if task and task.due_date %}{{ task.due_date.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+    </div>
+    
+    <div class="form-group">
+        <label for="priority">優先度</label>
+        <select id="priority" name="priority">
+            <option value="low" {% if task and task.priority == 'low' %}selected{% endif %}>低</option>
+            <option value="medium" {% if not task or task.priority == 'medium' %}selected{% endif %}>中</option>
+            <option value="high" {% if task and task.priority == 'high' %}selected{% endif %}>高</option>
+        </select>
+    </div>
+    
+    <div class="form-group">
+        <label for="category">カテゴリ</label>
+        <select id="category" name="category">
+            <option value="">選択してください</option>
+            <option value="work" {% if task and task.category == 'work' %}selected{% endif %}>仕事</option>
+            <option value="personal" {% if task and task.category == 'personal' %}selected{% endif %}>個人</option>
+            <option value="shopping" {% if task and task.category == 'shopping' %}selected{% endif %}>買い物</option>
+            <option value="other" {% if task and task.category == 'other' %}selected{% endif %}>その他</option>
+        </select>
+    </div>
+    
+    <div class="form-group">
+        <label for="location">場所（天気取得用）</label>
+        <input type="text" id="location" name="location" value="{{ task.location if task else '' }}" placeholder="例: Tokyo">
+    </div>
+    
+    <div class="actions">
+        <button type="submit" class="btn btn-primary">{% if task %}更新{% else %}作成{% endif %}</button>
+        <a href="/" class="btn btn-secondary">キャンセル</a>
+    </div>
+</form>
+{% endblock %}
+
+
+
+
+
+
+

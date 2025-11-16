@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}タスク一覧 - Smart ToDo App{% endblock %}
+
+{% block content %}
+<div class="filter-section">
+    <form method="GET" action="/" class="filter-group">
+        <div>
+            <label for="status">ステータス:</label>
+            <select name="status" id="status">
+                <option value="all" {% if status_filter == 'all' %}selected{% endif %}>すべて</option>
+                <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>未完了</option>
+                <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>完了</option>
+            </select>
+        </div>
+        <div>
+            <label for="category">カテゴリ:</label>
+            <select name="category" id="category">
+                <option value="">すべて</option>
+                <option value="work" {% if category_filter == 'work' %}selected{% endif %}>仕事</option>
+                <option value="personal" {% if category_filter == 'personal' %}selected{% endif %}>個人</option>
+                <option value="shopping" {% if category_filter == 'shopping' %}selected{% endif %}>買い物</option>
+                <option value="other" {% if category_filter == 'other' %}selected{% endif %}>その他</option>
+            </select>
+        </div>
+        <div>
+            <label for="sort">ソート:</label>
+            <select name="sort" id="sort">
+                <option value="created_at" {% if sort_by == 'created_at' %}selected{% endif %}>作成日時</option>
+                <option value="priority" {% if sort_by == 'priority' %}selected{% endif %}>優先度</option>
+                <option value="due_date" {% if sort_by == 'due_date' %}selected{% endif %}>期限</option>
+            </select>
+        </div>
+        <div>
+            <label for="q">検索:</label>
+            <input type="text" name="q" id="q" value="{{ search_query or '' }}" placeholder="キーワード検索">
+        </div>
+        <div>
+            <button type="submit" class="btn btn-primary">フィルタ</button>
+            <a href="/" class="btn btn-secondary">リセット</a>
+        </div>
+    </form>
+</div>
+
+<div style="text-align: right; margin-bottom: 20px;">
+    <a href="/tasks/new" class="btn btn-primary">新しいタスクを作成</a>
+</div>
+
+{% if tasks %}
+    {% for task in tasks %}
+    <div class="task-card">
+        <div class="task-header">
+            <div class="task-title">
+                {% if task.status == 'completed' %}
+                    <s>{{ task.title }}</s>
+                {% else %}
+                    {{ task.title }}
+                {% endif %}
+            </div>
+            <div>
+                <span class="badge badge-{{ task.priority }}">{{ task.priority }}</span>
+                <span class="badge badge-{{ task.status }}">
+                    {% if task.status == 'pending' %}未完了{% else %}完了{% endif %}
+                </span>
+            </div>
+        </div>
+        {% if task.description %}
+        <p style="margin: 10px 0; color: #6b7280;">{{ task.description }}</p>
+        {% endif %}
+        <div class="task-meta">
+            {% if task.category %}
+            <span>カテゴリ: {{ task.category }}</span>
+            {% endif %}
+            {% if task.due_date %}
+            <span>期限: {{ task.due_date.strftime('%Y-%m-%d %H:%M') }}</span>
+            {% endif %}
+            {% if task.location %}
+            <span>場所: {{ task.location }}</span>
+            {% endif %}
+            <span>作成: {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+        </div>
+        <div class="actions">
+            <a href="/tasks/{{ task.id }}" class="btn btn-primary">詳細</a>
+            <a href="/tasks/{{ task.id }}/edit" class="btn btn-secondary">編集</a>
+            <form method="POST" action="/tasks/{{ task.id }}/toggle" style="display: inline;">
+                <button type="submit" class="btn btn-success">
+                    {% if task.status == 'pending' %}完了{% else %}未完了に戻す{% endif %}
+                </button>
+            </form>
+            <form method="POST" action="/tasks/{{ task.id }}/delete" style="display: inline;" onsubmit="return confirm('本当に削除しますか？');">
+                <button type="submit" class="btn btn-danger">削除</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="task-card" style="text-align: center; padding: 40px;">
+        <p style="font-size: 18px; color: #6b7280;">タスクがありません</p>
+        <a href="/tasks/new" class="btn btn-primary" style="margin-top: 20px;">最初のタスクを作成</a>
+    </div>
+{% endif %}
+{% endblock %}
+
+
+
+
+
+
+
