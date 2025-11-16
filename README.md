@@ -1,48 +1,54 @@
 # Smart ToDo App
 
-外部APIと連携したインテリジェントなToDoアプリケーション
+Flask製のタスク管理アプリケーション。天気情報連携と統計ダッシュボード付き。
 
 ## 機能
 
-- タスクのCRUD操作
-- 天気情報との連携（OpenWeatherMap API）
-- 優先度・カテゴリによる管理
-- シンプルで使いやすいUI
+- ✅ タスクCRUD（作成・編集・削除）
+- ��️ 天気情報表示（OpenWeatherMap API）
+- 📊 統計ダッシュボード
+- 🔄 繰り返しタスク（日次・週次・月次）
+- 🔍 検索・フィルタリング
 
 ## セットアップ
+
+### 1. クローン
 ```bash
-# 仮想環境作成
+git clone https://github.com/isyu-tsuji/smart-todo-app.git
+cd smart-todo-app
+```
+
+### 2. 仮想環境
+```bash
 python3 -m venv venv
-source venv/bin/activate
-
-# 依存パッケージインストール
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+```
 
-# 環境変数設定
+### 3. 環境変数
+```bash
 cp .env.example .env
-# .envファイルを編集してAPIキーを設定
+# .envを編集してAPIキーを設定
+```
 
-# アプリ起動
+### 4. 起動
+```bash
 flask run
 ```
 
+http://localhost:5000 にアクセス
+
 ## 技術スタック
 
-- Python 3.x
-- Flask
-- SQLite
-- OpenWeatherMap API
+- **Backend**: Flask 3.0, SQLAlchemy
+- **Frontend**: HTML, CSS, Chart.js
+- **API**: OpenWeatherMap
+- **Database**: SQLite
 
-## 開発者
+## ドキュメント
 
-Created with Cursor + Claude
+詳細は [開発ログ](./docs/DEVELOPMENT_LOG.md) を参照
 
-## 実装状況
+## ライセンス
 
-- ✅ Phase 1: 基本CRUD機能（完了）
-- ⏳ Phase 2: 天気API連携（未実装）
-- ⏳ Phase 3: 拡張機能（未実装）
-
-## スクリーンショット
-
-ToDoアプリが動作中！
+MIT
