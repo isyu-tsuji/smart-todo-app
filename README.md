@@ -36,3 +36,13 @@ flask run
 ## 開発者
 
 Created with Cursor + Claude
+
+## 実装状況
+
+- ✅ Phase 1: 基本CRUD機能（完了）
+- ⏳ Phase 2: 天気API連携（未実装）
+- ⏳ Phase 3: 拡張機能（未実装）
+
+## スクリーンショット
+
+ToDoアプリが動作中！
