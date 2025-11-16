@@ -115,3 +115,4 @@ def get_weather_safe(location: str) -> Optional[Dict[str, Any]]:
         # 本番環境ではロガーを使用することを推奨
         return None
 
+
